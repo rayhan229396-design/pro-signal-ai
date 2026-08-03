@@ -7,7 +7,7 @@ import pytz
 import os
 
 # ====================== API KEY ======================
-TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "YOUR_TWELVE_DATA_API_KEY_HERE")
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "")
 
 # ---------------------- Pair Lists ----------------------
 FOREX_PAIRS = {
@@ -29,18 +29,18 @@ FOREX_PAIRS = {
 }
 
 CRYPTO_PAIRS = {
-    "BTCUSDT": "BTC/USDT",
-    "ETHUSDT": "ETH/USDT",
-    "SOLUSDT": "SOL/USDT",
-    "BNBUSDT": "BNB/USDT",
-    "XRPUSDT": "XRP/USDT",
-    "ADAUSDT": "ADA/USDT",
-    "DOGEUSDT": "DOGE/USDT",
-    "AVAXUSDT": "AVAX/USDT",
-    "DOTUSDT": "DOT/USDT",
-    "LINKUSDT": "LINK/USDT",
-    "MATICUSDT": "MATIC/USDT",
-    "LTCUSDT": "LTC/USDT",
+    "BTCUSDT": "BTC-USD",
+    "ETHUSDT": "ETH-USD",
+    "SOLUSDT": "SOL-USD",
+    "BNBUSDT": "BNB-USD",
+    "XRPUSDT": "XRP-USD",
+    "ADAUSDT": "ADA-USD",
+    "DOGEUSDT": "DOGE-USD",
+    "AVAXUSDT": "AVAX-USD",
+    "DOTUSDT": "DOT-USD",
+    "LINKUSDT": "LINK-USD",
+    "MATICUSDT": "MATIC-USD",
+    "LTCUSDT": "LTC-USD",
 }
 
 GOLD_PAIRS = {
@@ -48,17 +48,37 @@ GOLD_PAIRS = {
     "GOLD": "XAU/USD",
 }
 
-ALL_PAIRS = {**FOREX_PAIRS, **CRYPTO_PAIRS, **GOLD_PAIRS}
-
 def get_all_pairs_list():
     pairs = list(FOREX_PAIRS.keys()) + list(CRYPTO_PAIRS.keys()) + ["XAUUSD"]
     return sorted(set(pairs))
 
 
+def fetch_from_yfinance(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
+    """Fallback using Yahoo Finance"""
+    try:
+        yf_symbol = CRYPTO_PAIRS.get(symbol, symbol + "=X")
+        period = "7d" if interval in ["1m", "1min"] else "60d"
+        
+        df = yf.download(yf_symbol, period=period, interval=interval.replace("min", "m"), 
+                         progress=False, auto_adjust=True)
+        
+        if df.empty:
+            return pd.DataFrame()
+        
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        
+        df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
+        df = df.dropna().tail(limit)
+        return df
+    except Exception as e:
+        print(f"Yahoo Finance error for {symbol}: {e}")
+        return pd.DataFrame()
+
+
 def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataFrame:
     symbol = symbol.upper().replace("/", "").replace("-", "")
     
-    # Timeframe mapping
     tf_map = {
         "1m": "1min", "1min": "1min", "1 minute": "1min",
         "5m": "5min", "5min": "5min", "5 minute": "5min",
@@ -66,83 +86,64 @@ def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataF
     }
     interval = tf_map.get(timeframe.lower(), "5min")
     
-    # ===================== CRYPTO → Binance =====================
+    # ===================== CRYPTO → Yahoo Finance (Binance blocked) =====================
     if symbol in CRYPTO_PAIRS:
-        try:
-            exchange = ccxt.binance({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'spot'}
-            })
-            
-            binance_symbol = CRYPTO_PAIRS[symbol]
-            
-            # Binance timeframe format
-            binance_tf = {
-                "1min": "1m",
-                "5min": "5m",
-                "15min": "15m"
-            }.get(interval, "5m")
-            
-            ohlcv = exchange.fetch_ohlcv(binance_symbol, timeframe=binance_tf, limit=limit)
-            
-            df = pd.DataFrame(ohlcv, columns=["timestamp", "Open", "High", "Low", "Close", "Volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            df.set_index("timestamp", inplace=True)
-            df = df.astype(float)
-            
-            return df.dropna().tail(limit)
-            
-        except Exception as e:
-            print(f"Binance error for {symbol}: {e}")
-            return pd.DataFrame()
+        return fetch_from_yfinance(symbol, interval, limit)
     
     # ===================== FOREX + GOLD → Twelve Data =====================
-    else:
-        try:
-            # Convert symbol for Twelve Data
-            if symbol in FOREX_PAIRS:
-                td_symbol = FOREX_PAIRS[symbol]
-            elif symbol in GOLD_PAIRS:
-                td_symbol = GOLD_PAIRS[symbol]
-            else:
-                td_symbol = symbol
-            
-            url = "https://api.twelvedata.com/time_series"
-            params = {
-                "symbol": td_symbol,
-                "interval": interval,
-                "outputsize": limit,
-                "apikey": TWELVE_DATA_API_KEY,
-                "format": "JSON"
-            }
-            
-            response = requests.get(url, params=params, timeout=15)
-            data = response.json()
-            
-            if "values" not in data:
-                print(f"Twelve Data error: {data}")
-                return pd.DataFrame()
-            
-            df = pd.DataFrame(data["values"])
-            df = df.rename(columns={
-                "datetime": "timestamp",
-                "open": "Open",
-                "high": "High",
-                "low": "Low",
-                "close": "Close",
-                "volume": "Volume"
-            })
-            
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df.set_index("timestamp", inplace=True)
-            df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
-            df = df.sort_index()
-            
-            return df.dropna().tail(limit)
-            
-        except Exception as e:
-            print(f"Twelve Data error for {symbol}: {e}")
+    try:
+        if symbol in FOREX_PAIRS:
+            td_symbol = FOREX_PAIRS[symbol]
+        elif symbol in GOLD_PAIRS:
+            td_symbol = GOLD_PAIRS[symbol]
+        else:
+            td_symbol = symbol
+        
+        url = "https://api.twelvedata.com/time_series"
+        params = {
+            "symbol": td_symbol,
+            "interval": interval,
+            "outputsize": limit,
+            "apikey": TWELVE_DATA_API_KEY,
+            "format": "JSON"
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        data = response.json()
+        
+        if "values" not in data:
+            print(f"Twelve Data error for {symbol}: {data}")
             return pd.DataFrame()
+        
+        df = pd.DataFrame(data["values"])
+        
+        # Rename columns safely
+        rename_map = {
+            "datetime": "timestamp",
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+        }
+        df = df.rename(columns=rename_map)
+        
+        # Volume may not exist for Forex
+        if "volume" in df.columns:
+            df = df.rename(columns={"volume": "Volume"})
+        else:
+            df["Volume"] = 0
+        
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df.set_index("timestamp", inplace=True)
+        
+        df = df[["Open", "High", "Low", "Close", "Volume"]].astype(float)
+        df = df.sort_index()
+        
+        return df.dropna().tail(limit)
+        
+    except Exception as e:
+        print(f"Twelve Data error for {symbol}: {e}")
+        return pd.DataFrame()
 
 
 def get_dhaka_time():
