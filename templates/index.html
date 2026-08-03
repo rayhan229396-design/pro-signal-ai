@@ -144,6 +144,7 @@
             transition: transform 0.15s, box-shadow 0.15s;
             box-shadow: 0 4px 20px rgba(0, 150, 255, 0.35);
             margin-top: 6px;
+            position: relative;
         }
         
         .btn:hover {
@@ -153,6 +154,38 @@
         
         .btn:active {
             transform: translateY(0);
+        }
+        
+        .btn.loading {
+            pointer-events: none;
+            opacity: 0.85;
+        }
+        
+        .btn.loading .btn-text {
+            visibility: hidden;
+        }
+        
+        .spinner {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .btn.loading .spinner {
+            display: block;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
         
         .result-box {
@@ -176,14 +209,14 @@
             margin-bottom: 18px;
         }
         
-        .signal-buy {
+        .signal-buy, .signal-call {
             background: rgba(0, 255, 157, 0.1);
             border: 1px solid var(--green);
             color: var(--green);
             text-shadow: 0 0 15px rgba(0, 255, 157, 0.5);
         }
         
-        .signal-sell {
+        .signal-sell, .signal-put {
             background: rgba(255, 59, 92, 0.1);
             border: 1px solid var(--red);
             color: var(--red);
@@ -288,7 +321,7 @@
             <h1>REAL MARKET SIGNAL AI</h1>
             <p class="subtitle">Advanced Algorithmic Confluence Engine</p>
             
-            <form method="POST" action="/analyze">
+            <form method="POST" action="/analyze" id="signalForm">
                 <label>Select Asset Pair</label>
                 <select name="pair" required>
                     {% for p in pairs %}
@@ -303,15 +336,18 @@
                     <option value="15m" {% if selected_tf == "15m" %}selected{% endif %}>15 MINUTE</option>
                 </select>
                 
-                <button type="submit" class="btn">ANALYZE SIGNAL</button>
+                <button type="submit" class="btn" id="analyzeBtn">
+                    <span class="btn-text">ANALYZE SIGNAL</span>
+                    <div class="spinner"></div>
+                </button>
             </form>
             
             {% if result %}
             <div class="result-box">
-                {% if result.signal == "BUY" %}
-                    <div class="signal-badge signal-buy">▲ BUY / LONG</div>
-                {% elif result.signal == "SELL" %}
-                    <div class="signal-badge signal-sell">▼ SELL / SHORT</div>
+                {% if result.signal == "CALL" or result.signal == "BUY" %}
+                    <div class="signal-badge signal-call">▲ CALL / UP</div>
+                {% elif result.signal == "PUT" or result.signal == "SELL" %}
+                    <div class="signal-badge signal-put">▼ PUT / DOWN</div>
                 {% else %}
                     <div class="signal-badge signal-wait">⚠ WAIT / NO TRADE</div>
                 {% endif %}
@@ -368,5 +404,12 @@
             </p>
         </div>
     </div>
+
+    <script>
+        document.getElementById('signalForm').addEventListener('submit', function() {
+            const btn = document.getElementById('analyzeBtn');
+            btn.classList.add('loading');
+        });
+    </script>
 </body>
 </html>
