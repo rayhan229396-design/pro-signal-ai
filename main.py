@@ -1,21 +1,15 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-import uvicorn
-
 from utils.data_fetcher import fetch_data, get_all_pairs_list
 from utils.analysis import add_indicators, generate_signal
 
-app = FastAPI(title="Pro Market Signal AI")
+app = FastAPI(title="Real Market Signal AI v2")
 templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    try:
-        pairs = get_all_pairs_list()
-    except:
-        pairs = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT", "XAUUSD"]
-    
+    pairs = get_all_pairs_list()
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -29,38 +23,33 @@ async def home(request: Request):
 
 @app.post("/analyze", response_class=HTMLResponse)
 async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form(...)):
-    try:
-        pairs = get_all_pairs_list()
-    except:
-        pairs = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT", "XAUUSD"]
-    
+    pairs = get_all_pairs_list()
     try:
         df = fetch_data(pair, timeframe)
-        
         if df is None or df.empty:
             result = {
                 "signal": "WAIT",
                 "confidence": 0,
-                "trend": "Data Error",
+                "trend": "No Data",
                 "entry": "None",
-                "reasons": ["Failed to fetch market data. Try another pair."],
+                "reasons": ["Unable to fetch live market data from sources."],
                 "price": 0,
-                "time": "--:--:--",
+                "time": "--:--:--"
             }
         else:
             df = add_indicators(df)
-            result = generate_signal(df)
+            result = generate_signal(df, pair=pair, timeframe=timeframe)
     except Exception as e:
         result = {
             "signal": "WAIT",
             "confidence": 0,
             "trend": "Error",
             "entry": "None",
-            "reasons": [f"Analysis error: {str(e)[:80]}"],
+            "reasons": [f"Server Processing Error: {str(e)[:60]}"],
             "price": 0,
-            "time": "--:--:--",
+            "time": "--:--:--"
         }
-    
+        
     return templates.TemplateResponse(
         request,
         "index.html",
