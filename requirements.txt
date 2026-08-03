@@ -4,9 +4,7 @@ jinja2
 python-multipart
 pandas
 numpy
-yfinance
 ta
 requests
 python-dateutil
 pytz
-cachetools
