@@ -9,81 +9,45 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     
     df = df.copy()
     
-    # Trend
-    df["EMA_9"] = ta.trend.ema_indicator(df["Close"], window=9)
+    # Short-term EMAs (Binary এর জন্য দ্রুত)
+    df["EMA_5"] = ta.trend.ema_indicator(df["Close"], window=5)
+    df["EMA_8"] = ta.trend.ema_indicator(df["Close"], window=8)
+    df["EMA_13"] = ta.trend.ema_indicator(df["Close"], window=13)
     df["EMA_21"] = ta.trend.ema_indicator(df["Close"], window=21)
-    df["EMA_50"] = ta.trend.ema_indicator(df["Close"], window=50)
-    df["SMA_50"] = ta.trend.sma_indicator(df["Close"], window=50)
     
     # RSI
-    df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
+    df["RSI"] = ta.momentum.rsi(df["Close"], window=7)  # Faster RSI for binary
     
-    # MACD
-    macd = ta.trend.MACD(df["Close"])
+    # Stochastic
+    stoch = ta.momentum.StochasticOscillator(df["High"], df["Low"], df["Close"], window=8, smooth_window=3)
+    df["STOCH_K"] = stoch.stoch()
+    df["STOCH_D"] = stoch.stoch_signal()
+    
+    # MACD (faster settings)
+    macd = ta.trend.MACD(df["Close"], window_slow=21, window_fast=8, window_sign=5)
     df["MACD"] = macd.macd()
     df["MACD_Signal"] = macd.macd_signal()
     df["MACD_Hist"] = macd.macd_diff()
     
     # Bollinger Bands
-    bb = ta.volatility.BollingerBands(df["Close"], window=20, window_dev=2)
+    bb = ta.volatility.BollingerBands(df["Close"], window=14, window_dev=2)
     df["BB_Upper"] = bb.bollinger_hband()
     df["BB_Lower"] = bb.bollinger_lband()
     df["BB_Mid"] = bb.bollinger_mavg()
     
-    # Stochastic
-    stoch = ta.momentum.StochasticOscillator(df["High"], df["Low"], df["Close"])
-    df["STOCH_K"] = stoch.stoch()
-    df["STOCH_D"] = stoch.stoch_signal()
-    
-    # ADX (Trend Strength)
-    df["ADX"] = ta.trend.adx(df["High"], df["Low"], df["Close"], window=14)
-    
     # ATR
-    df["ATR"] = ta.volatility.average_true_range(df["High"], df["Low"], df["Close"], window=14)
+    df["ATR"] = ta.volatility.average_true_range(df["High"], df["Low"], df["Close"], window=10)
     
-    # Supertrend
-    df = add_supertrend(df)
+    # Candle body & direction
+    df["Body"] = df["Close"] - df["Open"]
+    df["Body_Size"] = abs(df["Body"])
+    df["Candle_Dir"] = np.where(df["Close"] > df["Open"], 1, -1)
     
-    # Support / Resistance
-    df["Resistance"] = df["High"].rolling(20).max()
-    df["Support"] = df["Low"].rolling(20).min()
-    
-    return df
-
-
-def add_supertrend(df: pd.DataFrame, period=10, multiplier=3.0) -> pd.DataFrame:
-    hl2 = (df["High"] + df["Low"]) / 2
-    atr = ta.volatility.average_true_range(df["High"], df["Low"], df["Close"], window=period)
-    
-    upper = hl2 + (multiplier * atr)
-    lower = hl2 - (multiplier * atr)
-    
-    supertrend = pd.Series(index=df.index, dtype=float)
-    direction = pd.Series(index=df.index, dtype=int)
-    
-    supertrend.iloc[0] = upper.iloc[0]
-    direction.iloc[0] = 1
-    
-    for i in range(1, len(df)):
-        if df["Close"].iloc[i] > supertrend.iloc[i-1]:
-            direction.iloc[i] = 1
-        elif df["Close"].iloc[i] < supertrend.iloc[i-1]:
-            direction.iloc[i] = -1
-        else:
-            direction.iloc[i] = direction.iloc[i-1]
-            
-        if direction.iloc[i] == 1:
-            supertrend.iloc[i] = max(lower.iloc[i], supertrend.iloc[i-1]) if direction.iloc[i-1] == 1 else lower.iloc[i]
-        else:
-            supertrend.iloc[i] = min(upper.iloc[i], supertrend.iloc[i-1]) if direction.iloc[i-1] == -1 else upper.iloc[i]
-    
-    df["Supertrend"] = supertrend
-    df["Supertrend_Dir"] = direction
     return df
 
 
 def generate_signal(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 30:
+    if df.empty or len(df) < 25:
         return {
             "signal": "WAIT",
             "confidence": 0,
@@ -96,124 +60,138 @@ def generate_signal(df: pd.DataFrame) -> dict:
     
     latest = df.iloc[-1]
     prev = df.iloc[-2]
+    prev2 = df.iloc[-3]
     
     score = 50
     reasons = []
     
     close = float(latest["Close"])
+    open_price = float(latest["Open"])
     rsi = latest.get("RSI", 50)
-    adx = latest.get("ADX", 0)
+    stoch_k = latest.get("STOCH_K", 50)
+    stoch_d = latest.get("STOCH_D", 50)
     
-    # ===================== LAYER 1: Trend Direction =====================
-    ema9 = latest.get("EMA_9")
-    ema21 = latest.get("EMA_21")
-    ema50 = latest.get("EMA_50")
+    # ===================== 1. Short EMA Momentum =====================
+    ema5 = latest.get("EMA_5")
+    ema8 = latest.get("EMA_8")
+    ema13 = latest.get("EMA_13")
     
-    if ema9 and ema21 and ema9 > ema21:
-        score += 7
-        reasons.append("EMA9 > EMA21 (short-term up)")
-    elif ema9 and ema21:
-        score -= 7
-        reasons.append("EMA9 < EMA21 (short-term down)")
+    if ema5 and ema8:
+        if ema5 > ema8:
+            score += 8
+            reasons.append("EMA5 > EMA8 (bullish momentum)")
+        else:
+            score -= 8
+            reasons.append("EMA5 < EMA8 (bearish momentum)")
     
-    if ema21 and ema50 and ema21 > ema50:
-        score += 6
-        reasons.append("EMA21 > EMA50 (medium uptrend)")
-    elif ema21 and ema50:
-        score -= 6
-        reasons.append("EMA21 < EMA50 (medium downtrend)")
+    if ema8 and ema13:
+        if ema8 > ema13:
+            score += 6
+            reasons.append("EMA8 > EMA13")
+        else:
+            score -= 6
+            reasons.append("EMA8 < EMA13")
     
-    if latest.get("Supertrend_Dir") == 1:
-        score += 8
-        reasons.append("Supertrend Bullish")
-    else:
-        score -= 8
-        reasons.append("Supertrend Bearish")
-    
-    # ===================== LAYER 2: Momentum =====================
-    if rsi < 30:
-        score += 13
+    # ===================== 2. RSI (Fast) =====================
+    if rsi < 28:
+        score += 12
         reasons.append(f"RSI Oversold ({rsi:.1f})")
     elif rsi < 40:
-        score += 7
+        score += 6
         reasons.append(f"RSI low ({rsi:.1f})")
-    elif rsi > 70:
-        score -= 13
+    elif rsi > 72:
+        score -= 12
         reasons.append(f"RSI Overbought ({rsi:.1f})")
     elif rsi > 60:
-        score -= 7
+        score -= 6
         reasons.append(f"RSI high ({rsi:.1f})")
     
-    if latest.get("MACD") and latest.get("MACD_Signal"):
-        if latest["MACD"] > latest["MACD_Signal"] and prev.get("MACD", 0) <= prev.get("MACD_Signal", 0):
-            score += 10
-            reasons.append("MACD Bullish Cross")
-        elif latest["MACD"] < latest["MACD_Signal"] and prev.get("MACD", 0) >= prev.get("MACD_Signal", 0):
-            score -= 10
-            reasons.append("MACD Bearish Cross")
-        elif latest.get("MACD_Hist", 0) > 0:
-            score += 4
-        else:
-            score -= 4
+    # ===================== 3. Stochastic =====================
+    if stoch_k < 20 and stoch_k > stoch_d:
+        score += 10
+        reasons.append(f"Stoch Oversold + Turning Up ({stoch_k:.1f})")
+    elif stoch_k < 25:
+        score += 6
+        reasons.append(f"Stoch Oversold ({stoch_k:.1f})")
+    elif stoch_k > 80 and stoch_k < stoch_d:
+        score -= 10
+        reasons.append(f"Stoch Overbought + Turning Down ({stoch_k:.1f})")
+    elif stoch_k > 75:
+        score -= 6
+        reasons.append(f"Stoch Overbought ({stoch_k:.1f})")
     
-    stoch_k = latest.get("STOCH_K", 50)
-    if stoch_k < 20:
-        score += 8
-        reasons.append(f"Stochastic Oversold ({stoch_k:.1f})")
-    elif stoch_k > 80:
-        score -= 8
-        reasons.append(f"Stochastic Overbought ({stoch_k:.1f})")
+    # ===================== 4. MACD Histogram =====================
+    macd_hist = latest.get("MACD_Hist", 0)
+    prev_hist = prev.get("MACD_Hist", 0)
     
-    # ===================== LAYER 3: Volatility & Strength =====================
-    if adx > 25:
-        score += 5
-        reasons.append(f"Strong Trend (ADX {adx:.1f})")
-    elif adx < 18:
+    if macd_hist > 0 and prev_hist <= 0:
+        score += 11
+        reasons.append("MACD Hist Bullish Cross")
+    elif macd_hist < 0 and prev_hist >= 0:
+        score -= 11
+        reasons.append("MACD Hist Bearish Cross")
+    elif macd_hist > 0:
+        score += 4
+    else:
         score -= 4
-        reasons.append(f"Weak Trend (ADX {adx:.1f})")
     
-    if latest.get("BB_Lower") and close <= latest["BB_Lower"] * 1.002:
-        score += 9
+    # ===================== 5. Current Candle Strength =====================
+    body = latest.get("Body", 0)
+    body_size = latest.get("Body_Size", 0)
+    atr = latest.get("ATR", 0.0001)
+    
+    # Strong bullish candle
+    if body > 0 and body_size > (atr * 0.6):
+        score += 7
+        reasons.append("Strong Bullish Candle")
+    # Strong bearish candle
+    elif body < 0 and body_size > (atr * 0.6):
+        score -= 7
+        reasons.append("Strong Bearish Candle")
+    
+    # ===================== 6. Bollinger Position =====================
+    bb_lower = latest.get("BB_Lower")
+    bb_upper = latest.get("BB_Upper")
+    
+    if bb_lower and close <= bb_lower * 1.001:
+        score += 8
         reasons.append("Price at Lower Bollinger")
-    elif latest.get("BB_Upper") and close >= latest["BB_Upper"] * 0.998:
-        score -= 9
+    elif bb_upper and close >= bb_upper * 0.999:
+        score -= 8
         reasons.append("Price at Upper Bollinger")
     
-    # ===================== LAYER 4: Structure =====================
-    dist_to_sup = (close - latest.get("Support", close)) / close * 100 if latest.get("Support") else 99
-    dist_to_res = (latest.get("Resistance", close) - close) / close * 100 if latest.get("Resistance") else 99
+    # ===================== 7. Recent Momentum (last 2 candles) =====================
+    if prev["Candle_Dir"] == 1 and latest["Candle_Dir"] == 1:
+        score += 5
+        reasons.append("2 consecutive bullish candles")
+    elif prev["Candle_Dir"] == -1 and latest["Candle_Dir"] == -1:
+        score -= 5
+        reasons.append("2 consecutive bearish candles")
     
-    if dist_to_sup < 0.40:
-        score += 8
-        reasons.append("Near Support")
-    if dist_to_res < 0.40:
-        score -= 8
-        reasons.append("Near Resistance")
-    
-    # Final Score Clamp
+    # Final score
     score = max(0, min(100, int(score)))
     
-    # ===================== Signal Decision (5m / 15m Optimized) =====================
-    if score >= 62:
-        signal = "BUY"
-        entry = "LONG"
+    # ===================== Binary Decision =====================
+    if score >= 64:
+        signal = "CALL"
+        entry = "UP"
         trend = "Bullish"
-    elif score <= 38:
-        signal = "SELL"
-        entry = "SHORT"
+    elif score <= 36:
+        signal = "PUT"
+        entry = "DOWN"
         trend = "Bearish"
     else:
         signal = "WAIT"
         entry = "None"
         trend = "Sideways / Unclear"
     
-    # Confidence Calculation
+    # Confidence
     if signal == "WAIT":
-        confidence = max(35, 100 - abs(score - 50) * 1.4)
+        confidence = max(35, 100 - abs(score - 50) * 1.5)
     else:
-        confidence = score if signal == "BUY" else (100 - score)
+        confidence = score if signal == "CALL" else (100 - score)
     
-    confidence = int(min(95, max(45, confidence)))
+    confidence = int(min(92, max(50, confidence)))
     
     return {
         "signal": signal,
@@ -224,6 +202,5 @@ def generate_signal(df: pd.DataFrame) -> dict:
         "price": round(close, 5),
         "time": get_dhaka_time(),
         "rsi": round(rsi, 1) if rsi else None,
-        "adx": round(adx, 1) if adx else None,
         "score": score
     }
