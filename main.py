@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from utils.data_fetcher import fetch_data, get_all_pairs_list
 from utils.analysis import add_indicators, generate_signal
 
-app = FastAPI(title="Real Market Signal AI v2")
+app = FastAPI(title="Real Market Signal AI")
 templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
@@ -32,7 +32,7 @@ async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form
                 "confidence": 0,
                 "trend": "No Data",
                 "entry": "None",
-                "reasons": ["Unable to fetch live market data from sources."],
+                "reasons": ["Unable to fetch live market data."],
                 "price": 0,
                 "time": "--:--:--"
             }
@@ -45,7 +45,7 @@ async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form
             "confidence": 0,
             "trend": "Error",
             "entry": "None",
-            "reasons": [f"Server Processing Error: {str(e)[:60]}"],
+            "reasons": [f"Processing error: {str(e)[:60]}"],
             "price": 0,
             "time": "--:--:--"
         }
