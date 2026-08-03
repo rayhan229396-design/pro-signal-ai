@@ -5,8 +5,8 @@ python-multipart
 pandas
 numpy
 yfinance
-ccxt
 ta
 requests
 python-dateutil
 pytz
+cachetools
