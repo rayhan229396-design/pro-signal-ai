@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import ta
-from utils.data_fetcher import get_dhaka_time
+from utils.data_fetcher import get_dhaka_time, fetch_data
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or len(df) < 30:
@@ -9,197 +9,166 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     
     df = df.copy()
     
-    # Short-term EMAs (Binary এর জন্য দ্রুত)
-    df["EMA_5"] = ta.trend.ema_indicator(df["Close"], window=5)
+    # EMA Momentum
     df["EMA_8"] = ta.trend.ema_indicator(df["Close"], window=8)
-    df["EMA_13"] = ta.trend.ema_indicator(df["Close"], window=13)
     df["EMA_21"] = ta.trend.ema_indicator(df["Close"], window=21)
+    df["EMA_200"] = ta.trend.ema_indicator(df["Close"], window=200)
     
-    # RSI
-    df["RSI"] = ta.momentum.rsi(df["Close"], window=7)  # Faster RSI for binary
-    
-    # Stochastic
+    # RSI & Stochastic
+    df["RSI"] = ta.momentum.rsi(df["Close"], window=7)
     stoch = ta.momentum.StochasticOscillator(df["High"], df["Low"], df["Close"], window=8, smooth_window=3)
     df["STOCH_K"] = stoch.stoch()
     df["STOCH_D"] = stoch.stoch_signal()
     
-    # MACD (faster settings)
-    macd = ta.trend.MACD(df["Close"], window_slow=21, window_fast=8, window_sign=5)
-    df["MACD"] = macd.macd()
-    df["MACD_Signal"] = macd.macd_signal()
-    df["MACD_Hist"] = macd.macd_diff()
-    
-    # Bollinger Bands
+    # Bollinger Bands & ATR
     bb = ta.volatility.BollingerBands(df["Close"], window=14, window_dev=2)
     df["BB_Upper"] = bb.bollinger_hband()
     df["BB_Lower"] = bb.bollinger_lband()
-    df["BB_Mid"] = bb.bollinger_mavg()
-    
-    # ATR
     df["ATR"] = ta.volatility.average_true_range(df["High"], df["Low"], df["Close"], window=10)
     
-    # Candle body & direction
+    # Candle Structure
     df["Body"] = df["Close"] - df["Open"]
     df["Body_Size"] = abs(df["Body"])
-    df["Candle_Dir"] = np.where(df["Close"] > df["Open"], 1, -1)
+    df["Upper_Wick"] = df["High"] - df[["Open", "Close"]].max(axis=1)
+    df["Lower_Wick"] = df[["Open", "Close"]].min(axis=1) - df["Low"]
     
     return df
 
+def detect_candlestick_pattern(df: pd.DataFrame) -> tuple:
+    if len(df) < 3:
+        return None, 0
+    
+    curr = df.iloc[-1]
+    prev = df.iloc[-2]
+    
+    body = curr["Body_Size"]
+    l_wick = curr["Lower_Wick"]
+    u_wick = curr["Upper_Wick"]
+    
+    # Hammer / Pinbar (Bullish)
+    if l_wick >= (body * 2) and u_wick <= (body * 0.5):
+        return "Bullish Pinbar / Hammer", 15
+    
+    # Shooting Star (Bearish)
+    if u_wick >= (body * 2) and l_wick <= (body * 0.5):
+        return "Bearish Shooting Star", -15
+        
+    # Bullish Engulfing
+    if prev["Body"] < 0 and curr["Body"] > 0 and curr["Close"] > prev["Open"] and curr["Open"] < prev["Close"]:
+        return "Bullish Engulfing", 18
+        
+    # Bearish Engulfing
+    if prev["Body"] > 0 and curr["Body"] < 0 and curr["Close"] < prev["Open"] and curr["Open"] > prev["Close"]:
+        return "Bearish Engulfing", -18
+        
+    return None, 0
 
-def generate_signal(df: pd.DataFrame) -> dict:
-    if df.empty or len(df) < 25:
+def check_support_resistance(df: pd.DataFrame) -> tuple:
+    if len(df) < 20:
+        return "Mid Zone", 0
+    
+    curr_close = df.iloc[-1]["Close"]
+    recent_low = df["Low"].tail(20).min()
+    recent_high = df["High"].tail(20).max()
+    
+    # Price Near Support (Within 0.05%)
+    if abs(curr_close - recent_low) / curr_close < 0.0005:
+        return "At Key Support Level", 15
+    # Price Near Resistance
+    elif abs(curr_close - recent_high) / curr_close < 0.0005:
+        return "At Key Resistance Level", -15
+        
+    return "Neutral Zone", 0
+
+def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> dict:
+    if df.empty or len(df) < 30:
         return {
-            "signal": "WAIT",
-            "confidence": 0,
-            "trend": "Unknown",
-            "entry": "None",
-            "reasons": ["Not enough data"],
-            "price": 0,
-            "time": get_dhaka_time()
+            "signal": "WAIT", "confidence": 0, "trend": "Unknown",
+            "entry": "None", "reasons": ["Insufficient Market Data"],
+            "price": 0, "time": get_dhaka_time()
         }
     
-    latest = df.iloc[-1]
-    prev = df.iloc[-2]
-    prev2 = df.iloc[-3]
+    # ================= 1. Multi-Timeframe (HTF) Alignment =================
+    htf_frame = "15m" if timeframe in ["1m", "5m"] else "1h"
+    htf_df = fetch_data(pair, timeframe=htf_frame, limit=50)
+    htf_trend = "Neutral"
     
+    if not htf_df.empty and len(htf_df) > 20:
+        htf_ema = ta.trend.ema_indicator(htf_df["Close"], window=20)
+        if htf_df["Close"].iloc[-1] > htf_ema.iloc[-1]:
+            htf_trend = "Bullish"
+        else:
+            htf_trend = "Bearish"
+    
+    latest = df.iloc[-1]
     score = 50
     reasons = []
     
-    close = float(latest["Close"])
-    open_price = float(latest["Open"])
+    # HTF Trend Filter
+    if htf_trend == "Bullish":
+        score += 10
+        reasons.append(f"Higher Timeframe ({htf_frame}) is Bullish")
+    elif htf_trend == "Bearish":
+        score -= 10
+        reasons.append(f"Higher Timeframe ({htf_frame}) is Bearish")
+
+    # ================= 2. Price Action & Candlestick =================
+    pattern, p_score = detect_candlestick_pattern(df)
+    if pattern:
+        score += p_score
+        reasons.append(f"Pattern: {pattern}")
+        
+    sr_zone, sr_score = check_support_resistance(df)
+    if sr_score != 0:
+        score += sr_score
+        reasons.append(sr_zone)
+
+    # ================= 3. Technical Indicators =================
     rsi = latest.get("RSI", 50)
     stoch_k = latest.get("STOCH_K", 50)
-    stoch_d = latest.get("STOCH_D", 50)
     
-    # ===================== 1. Short EMA Momentum =====================
-    ema5 = latest.get("EMA_5")
-    ema8 = latest.get("EMA_8")
-    ema13 = latest.get("EMA_13")
-    
-    if ema5 and ema8:
-        if ema5 > ema8:
-            score += 8
-            reasons.append("EMA5 > EMA8 (bullish momentum)")
-        else:
-            score -= 8
-            reasons.append("EMA5 < EMA8 (bearish momentum)")
-    
-    if ema8 and ema13:
-        if ema8 > ema13:
-            score += 6
-            reasons.append("EMA8 > EMA13")
-        else:
-            score -= 6
-            reasons.append("EMA8 < EMA13")
-    
-    # ===================== 2. RSI (Fast) =====================
-    if rsi < 28:
-        score += 12
-        reasons.append(f"RSI Oversold ({rsi:.1f})")
-    elif rsi < 40:
-        score += 6
-        reasons.append(f"RSI low ({rsi:.1f})")
-    elif rsi > 72:
-        score -= 12
-        reasons.append(f"RSI Overbought ({rsi:.1f})")
-    elif rsi > 60:
-        score -= 6
-        reasons.append(f"RSI high ({rsi:.1f})")
-    
-    # ===================== 3. Stochastic =====================
-    if stoch_k < 20 and stoch_k > stoch_d:
+    if rsi < 30:
         score += 10
-        reasons.append(f"Stoch Oversold + Turning Up ({stoch_k:.1f})")
-    elif stoch_k < 25:
-        score += 6
-        reasons.append(f"Stoch Oversold ({stoch_k:.1f})")
-    elif stoch_k > 80 and stoch_k < stoch_d:
+        reasons.append(f"RSI Oversold ({rsi:.1f})")
+    elif rsi > 70:
         score -= 10
-        reasons.append(f"Stoch Overbought + Turning Down ({stoch_k:.1f})")
-    elif stoch_k > 75:
-        score -= 6
-        reasons.append(f"Stoch Overbought ({stoch_k:.1f})")
-    
-    # ===================== 4. MACD Histogram =====================
-    macd_hist = latest.get("MACD_Hist", 0)
-    prev_hist = prev.get("MACD_Hist", 0)
-    
-    if macd_hist > 0 and prev_hist <= 0:
-        score += 11
-        reasons.append("MACD Hist Bullish Cross")
-    elif macd_hist < 0 and prev_hist >= 0:
-        score -= 11
-        reasons.append("MACD Hist Bearish Cross")
-    elif macd_hist > 0:
-        score += 4
-    else:
-        score -= 4
-    
-    # ===================== 5. Current Candle Strength =====================
-    body = latest.get("Body", 0)
-    body_size = latest.get("Body_Size", 0)
-    atr = latest.get("ATR", 0.0001)
-    
-    # Strong bullish candle
-    if body > 0 and body_size > (atr * 0.6):
-        score += 7
-        reasons.append("Strong Bullish Candle")
-    # Strong bearish candle
-    elif body < 0 and body_size > (atr * 0.6):
-        score -= 7
-        reasons.append("Strong Bearish Candle")
-    
-    # ===================== 6. Bollinger Position =====================
-    bb_lower = latest.get("BB_Lower")
-    bb_upper = latest.get("BB_Upper")
-    
-    if bb_lower and close <= bb_lower * 1.001:
+        reasons.append(f"RSI Overbought ({rsi:.1f})")
+        
+    if stoch_k < 20:
         score += 8
-        reasons.append("Price at Lower Bollinger")
-    elif bb_upper and close >= bb_upper * 0.999:
+        reasons.append("Stochastic Oversold")
+    elif stoch_k > 80:
         score -= 8
-        reasons.append("Price at Upper Bollinger")
-    
-    # ===================== 7. Recent Momentum (last 2 candles) =====================
-    if prev["Candle_Dir"] == 1 and latest["Candle_Dir"] == 1:
-        score += 5
-        reasons.append("2 consecutive bullish candles")
-    elif prev["Candle_Dir"] == -1 and latest["Candle_Dir"] == -1:
-        score -= 5
-        reasons.append("2 consecutive bearish candles")
-# Final score
+        reasons.append("Stochastic Overbought")
+
+    # EMA Alignment
+    if latest["EMA_8"] > latest["EMA_21"]:
+        score += 6
+    else:
+        score -= 6
+
     score = max(0, min(100, int(score)))
-    
-    # ===================== Binary Decision (More Sensitive) =====================
-    if score >= 62:
+
+    # ================= 4. Strict Binary Decision =================
+    # HTF ট্রেন্ডের বিপরীতে সিগন্যাল ফিল্টার করা
+    if score >= 65 and htf_trend != "Bearish":
         signal = "CALL"
-        entry = "UP"
-        trend = "Bullish"
-    elif score <= 38:
+        entry = "UP (1-Candle Expiry)"
+    elif score <= 35 and htf_trend != "Bullish":
         signal = "PUT"
-        entry = "DOWN"
-        trend = "Bearish"
+        entry = "DOWN (1-Candle Expiry)"
     else:
         signal = "WAIT"
         entry = "None"
-        trend = "Sideways / Unclear"
-    
-    # Confidence
-    if signal == "WAIT":
-        confidence = max(30, 100 - abs(score - 50) * 1.6)
-    else:
-        confidence = score if signal == "CALL" else (100 - score)
-    
-    confidence = int(min(90, max(50, confidence)))
+
+    confidence = score if signal == "CALL" else (100 - score if signal == "PUT" else 50)
     
     return {
         "signal": signal,
-        "confidence": confidence,
-        "trend": trend,
+        "confidence": int(confidence),
+        "trend": htf_trend,
         "entry": entry,
-        "reasons": reasons[:7],
-        "price": round(close, 5),
-        "time": get_dhaka_time(),
-        "rsi": round(rsi, 1) if rsi else None,
-        "score": score          # ← এইটা যোগ করা হয়েছে
+        "reasons": reasons[:6],
+        "price": round(float(latest["Close"]), 5),
+        "time": get_dhaka_time()
     }
