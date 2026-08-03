@@ -37,11 +37,11 @@ def detect_candlestick_pattern(df: pd.DataFrame) -> tuple:
     l_wick = curr["Lower_Wick"]
     u_wick = curr["Upper_Wick"]
     
-    # Hammer / Pinbar
+    # Hammer / Bullish Pinbar
     if l_wick >= (body * 2) and u_wick <= (body * 0.5):
         return "Bullish Pinbar / Hammer", 15
     
-    # Shooting Star
+    # Shooting Star / Bearish Pinbar
     if u_wick >= (body * 2) and l_wick <= (body * 0.5):
         return "Bearish Shooting Star", -15
         
@@ -63,10 +63,11 @@ def check_support_resistance(df: pd.DataFrame) -> tuple:
     recent_low = df["Low"].tail(20).min()
     recent_high = df["High"].tail(20).max()
     
-    if abs(curr_close - recent_low) / curr_close < 0.0005:
-        return "At Key Support Level", 15
-    elif abs(curr_close - recent_high) / curr_close < 0.0005:
-        return "At Key Resistance Level", -15
+    # থ্রেশহোল্ড বাড়িয়ে 0.0015 (0.15%) করা হয়েছে যেন লেভেল সহজে ডিটেক্ট হয়
+    if abs(curr_close - recent_low) / curr_close < 0.0015:
+        return "At Key Support Level", 12
+    elif abs(curr_close - recent_high) / curr_close < 0.0015:
+        return "At Key Resistance Level", -12
         
     return "Neutral Zone", 0
 
@@ -113,21 +114,21 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
         score += sr_score
         reasons.append(sr_zone)
 
-    # 3. Technical Indicators
+    # 3. Technical Indicators (RSI এবং Stochastic সীমা শিথিল করা হয়েছে)
     rsi = latest.get("RSI", 50)
     stoch_k = latest.get("STOCH_K", 50)
     
-    if rsi < 30:
+    if rsi < 35:  # 30 থেকে বাড়িয়ে 35 করা হয়েছে
         score += 10
         reasons.append(f"RSI Oversold ({rsi:.1f})")
-    elif rsi > 70:
+    elif rsi > 65:  # 70 থেকে কমিয়ে 65 করা হয়েছে
         score -= 10
         reasons.append(f"RSI Overbought ({rsi:.1f})")
         
-    if stoch_k < 20:
+    if stoch_k < 25:  # 20 থেকে বাড়িয়ে 25 করা হয়েছে
         score += 8
         reasons.append("Stochastic Oversold")
-    elif stoch_k > 80:
+    elif stoch_k > 75:  # 80 থেকে কমিয়ে 75 করা হয়েছে
         score -= 8
         reasons.append("Stochastic Overbought")
 
@@ -138,11 +139,11 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
 
     score = max(0, min(100, int(score)))
 
-    # 4. Final Binary Signal Decision
-    if score >= 62 and htf_trend != "Bearish":
+    # 4. Final Binary Signal Decision (থ্রেশহোল্ড ৫০-এর কাছাকাছি ৫৮ এবং ৪২ এ আনা হয়েছে)
+    if score >= 58 and htf_trend != "Bearish":
         signal = "CALL"
         entry = "UP (1-Candle Expiry)"
-    elif score <= 38 and htf_trend != "Bullish":
+    elif score <= 42 and htf_trend != "Bullish":
         signal = "PUT"
         entry = "DOWN (1-Candle Expiry)"
     else:
