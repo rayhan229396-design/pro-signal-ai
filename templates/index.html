@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real Market Signal AI</title>
+    <title>Real Market Signal AI v2</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -18,11 +18,7 @@
             --muted: #94a3b8;
         }
         
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             background: var(--bg);
@@ -38,18 +34,14 @@
                 radial-gradient(ellipse at bottom, #0c1222 0%, transparent 60%);
         }
         
-        .container {
-            width: 100%;
-            max-width: 420px;
-        }
+        .container { width: 100%; max-width: 440px; }
         
         .card {
             background: linear-gradient(145deg, #111827, #0f172a);
             border: 1px solid rgba(0, 240, 255, 0.15);
             border-radius: 20px;
             padding: 28px 22px;
-            box-shadow: 0 0 40px rgba(0, 240, 255, 0.08),
-                        inset 0 1px 0 rgba(255,255,255,0.05);
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(255,255,255,0.05);
         }
         
         .badge {
@@ -68,17 +60,14 @@
         }
         
         .badge::before {
-            content: "";
-            width: 7px;
-            height: 7px;
-            background: var(--cyan);
-            border-radius: 50%;
+            content: ""; width: 7px; height: 7px;
+            background: var(--cyan); border-radius: 50%;
             box-shadow: 0 0 8px var(--cyan);
         }
         
         h1 {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.6rem;
+            font-size: 1.5rem;
             font-weight: 700;
             text-align: center;
             background: linear-gradient(90deg, #00f0ff, #00ff9d);
@@ -91,9 +80,9 @@
         .subtitle {
             text-align: center;
             color: var(--muted);
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             letter-spacing: 1.5px;
-            margin-bottom: 28px;
+            margin-bottom: 24px;
             text-transform: uppercase;
         }
         
@@ -122,11 +111,6 @@
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2300f0ff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 14px center;
-            transition: border-color 0.2s;
-        }
-        
-        select:focus {
-            border-color: var(--cyan);
         }
         
         .btn {
@@ -141,124 +125,48 @@
             padding: 16px;
             border-radius: 12px;
             cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s;
             box-shadow: 0 4px 20px rgba(0, 150, 255, 0.35);
-            margin-top: 6px;
             position: relative;
         }
         
-        .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 25px rgba(0, 150, 255, 0.5);
-        }
-        
-        .btn:active {
-            transform: translateY(0);
-        }
-        
-        .btn.loading {
-            pointer-events: none;
-            opacity: 0.85;
-        }
-        
-        .btn.loading .btn-text {
-            visibility: hidden;
-        }
+        .btn.loading .btn-text { visibility: hidden; }
         
         .spinner {
             display: none;
-            width: 22px;
-            height: 22px;
+            width: 22px; height: 22px;
             border: 3px solid rgba(255,255,255,0.3);
             border-top: 3px solid white;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
-            position: absolute;
-            top: 50%;
-            left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
         }
         
-        .btn.loading .spinner {
-            display: block;
-        }
+        .btn.loading .spinner { display: block; }
+        @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
         
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-        
-        .result-box {
-            margin-top: 28px;
-            animation: fadeIn 0.4s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .result-box { margin-top: 24px; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
         .signal-badge {
             text-align: center;
-            padding: 16px;
+            padding: 14px;
             border-radius: 14px;
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: 700;
             letter-spacing: 2px;
-            margin-bottom: 18px;
-        }
-        
-        .signal-buy, .signal-call {
-            background: rgba(0, 255, 157, 0.1);
-            border: 1px solid var(--green);
-            color: var(--green);
-            text-shadow: 0 0 15px rgba(0, 255, 157, 0.5);
-        }
-        
-        .signal-sell, .signal-put {
-            background: rgba(255, 59, 92, 0.1);
-            border: 1px solid var(--red);
-            color: var(--red);
-            text-shadow: 0 0 15px rgba(255, 59, 92, 0.5);
-        }
-        
-        .signal-wait {
-            background: rgba(255, 204, 0, 0.1);
-            border: 1px solid var(--yellow);
-            color: var(--yellow);
-            text-shadow: 0 0 15px rgba(255, 204, 0, 0.4);
-        }
-        
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
             margin-bottom: 16px;
         }
         
-        .info-card {
-            background: rgba(0, 0, 0, 0.35);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 12px;
-            padding: 14px 12px;
-            text-align: center;
-        }
+        .signal-call { background: rgba(0, 255, 157, 0.1); border: 1px solid var(--green); color: var(--green); }
+        .signal-put { background: rgba(255, 59, 92, 0.1); border: 1px solid var(--red); color: var(--red); }
+        .signal-wait { background: rgba(255, 204, 0, 0.1); border: 1px solid var(--yellow); color: var(--yellow); }
         
-        .info-label {
-            font-size: 0.7rem;
-            color: var(--muted);
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-        
-        .info-value {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--cyan);
-        }
-        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .info-card { background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 10px; text-align: center; }
+        .info-label { font-size: 0.65rem; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; text-transform: uppercase; }
+        .info-value { font-size: 1.05rem; font-weight: 700; color: var(--cyan); }
         .info-value.green { color: var(--green); }
         .info-value.red { color: var(--red); }
         .info-value.yellow { color: var(--yellow); }
@@ -268,58 +176,26 @@
             border: 1px solid rgba(0, 240, 255, 0.15);
             border-radius: 12px;
             padding: 14px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             line-height: 1.5;
             color: #cbd5e1;
         }
         
-        .summary strong {
-            color: var(--cyan);
-            display: block;
-            margin-bottom: 6px;
-            font-size: 0.75rem;
-            letter-spacing: 1px;
-        }
-        
-        .reasons {
-            margin-top: 8px;
-            padding-left: 14px;
-        }
-        
-        .reasons li {
-            margin-bottom: 3px;
-            color: #94a3b8;
-            font-size: 0.85rem;
-        }
-        
-        .footer-note {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 0.75rem;
-            color: #64748b;
-            line-height: 1.4;
-        }
-        
-        .warning {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            justify-content: center;
-            margin-top: 14px;
-            font-size: 0.75rem;
-            color: #fbbf24;
-        }
+        .summary strong { color: var(--cyan); display: block; margin-bottom: 6px; font-size: 0.75rem; letter-spacing: 1px; }
+        .reasons { margin-top: 8px; padding-left: 14px; }
+        .reasons li { margin-bottom: 3px; color: #94a3b8; font-size: 0.8rem; }
+        .footer-note { text-align: center; margin-top: 18px; font-size: 0.7rem; color: #64748b; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
             <div style="text-align:center">
-                <div class="badge">4-LAYER INSTITUTIONAL LOGIC</div>
+                <div class="badge">PRO PRICE ACTION & MTF ENGINE</div>
             </div>
             
             <h1>REAL MARKET SIGNAL AI</h1>
-            <p class="subtitle">Advanced Algorithmic Confluence Engine</p>
+            <p class="subtitle">Multi-Timeframe Price Action Confluence</p>
             
             <form method="POST" action="/analyze" id="signalForm">
                 <label>Select Asset Pair</label>
@@ -344,10 +220,10 @@
             
             {% if result %}
             <div class="result-box">
-                {% if result.signal == "CALL" or result.signal == "BUY" %}
-                    <div class="signal-badge signal-call">▲ CALL / UP</div>
-                {% elif result.signal == "PUT" or result.signal == "SELL" %}
-                    <div class="signal-badge signal-put">▼ PUT / DOWN</div>
+                {% if result.signal == "CALL" %}
+                    <div class="signal-badge signal-call">▲ CALL (BUY)</div>
+                {% elif result.signal == "PUT" %}
+                    <div class="signal-badge signal-put">▼ PUT (SELL)</div>
                 {% else %}
                     <div class="signal-badge signal-wait">⚠ WAIT / NO TRADE</div>
                 {% endif %}
@@ -358,8 +234,8 @@
                         <div class="info-value">{{ result.time }}</div>
                     </div>
                     <div class="info-card">
-                        <div class="info-label">Accuracy Score</div>
-                        <div class="info-value {% if result.confidence >= 70 %}green{% elif result.confidence >= 50 %}yellow{% else %}red{% endif %}">
+                        <div class="info-label">Confidence Score</div>
+                        <div class="info-value {% if result.confidence >= 70 %}green{% elif result.confidence >= 55 %}yellow{% else %}red{% endif %}">
                             {{ result.confidence }}%
                         </div>
                     </div>
@@ -368,7 +244,7 @@
                         <div class="info-value">{{ result.price }}</div>
                     </div>
                     <div class="info-card">
-                        <div class="info-label">Market Trend</div>
+                        <div class="info-label">HTF Trend (15m/1h)</div>
                         <div class="info-value {% if result.trend == 'Bullish' %}green{% elif result.trend == 'Bearish' %}red{% else %}yellow{% endif %}">
                             {{ result.trend }}
                         </div>
@@ -376,11 +252,11 @@
                 </div>
                 
                 <div class="summary">
-                    <strong>LOGICAL ANALYSIS SUMMARY</strong>
+                    <strong>PRICE ACTION & CONFLUENCE ANALYSIS</strong>
                     {% if result.signal == "WAIT" %}
-                        Confluence score is not strong enough. System recommends waiting to protect capital.
+                        High timeframe alignment or key confluence missing. Recommended to wait.
                     {% else %}
-                        {{ result.signal }} signal generated with {{ result.confidence }}% confidence. Suggested entry: <b>{{ result.entry }}</b>.
+                        <b>{{ result.signal }}</b> signal recommended for <b>1 Candle Expiry</b>.
                     {% endif %}
                     
                     {% if result.reasons %}
@@ -394,21 +270,15 @@
             </div>
             {% endif %}
             
-            <div class="warning">
-                ⚠ Strict Filter: Signals only trigger on high confluence
-            </div>
-            
             <p class="footer-note">
-                For educational purposes only. Not financial advice.<br>
-                Trading involves substantial risk of loss.
+                Educational Tool. Uses Real Price Action + Multi-Timeframe Alignment.<br>Binary Options carry financial risk.
             </p>
         </div>
     </div>
 
     <script>
         document.getElementById('signalForm').addEventListener('submit', function() {
-            const btn = document.getElementById('analyzeBtn');
-            btn.classList.add('loading');
+            document.getElementById('analyzeBtn').classList.add('loading');
         });
     </script>
 </body>
