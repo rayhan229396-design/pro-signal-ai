@@ -171,7 +171,7 @@ def generate_signal(df: pd.DataFrame) -> dict:
     score = max(0, min(100, int(score)))
     
     # ===================== Binary Decision (More Sensitive) =====================
-    if score >= 68:
+    if score >= 62:
         signal = "CALL"
         entry = "UP"
         trend = "Bullish"
