@@ -11,36 +11,52 @@ templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    pairs = get_all_pairs_list()
+    try:
+        pairs = get_all_pairs_list()
+    except:
+        pairs = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT", "XAUUSD"]
+    
     return templates.TemplateResponse("index.html", {
         "request": request,
         "pairs": pairs,
-        "result": None
+        "result": None,
+        "selected_pair": "EURUSD",
+        "selected_tf": "5m"
     })
 
 @app.post("/analyze", response_class=HTMLResponse)
 async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form(...)):
-    pairs = get_all_pairs_list()
+    try:
+        pairs = get_all_pairs_list()
+    except:
+        pairs = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT", "XAUUSD"]
     
-    df = fetch_data(pair, timeframe)
-    
-    if df.empty:
+    try:
+        df = fetch_data(pair, timeframe)
+        
+        if df is None or df.empty:
+            result = {
+                "signal": "WAIT",
+                "confidence": 0,
+                "trend": "Data Error",
+                "entry": "None",
+                "reasons": ["Failed to fetch market data. Try another pair."],
+                "price": 0,
+                "time": "--:--:--",
+            }
+        else:
+            df = add_indicators(df)
+            result = generate_signal(df)
+    except Exception as e:
         result = {
             "signal": "WAIT",
             "confidence": 0,
-            "trend": "Data Error",
+            "trend": "Error",
             "entry": "None",
-            "reasons": ["Failed to fetch market data. Try another pair or timeframe."],
+            "reasons": [f"Analysis error: {str(e)[:80]}"],
             "price": 0,
             "time": "--:--:--",
-            "error": True
         }
-    else:
-        df = add_indicators(df)
-        result = generate_signal(df)
-        result["error"] = False
-        result["pair"] = pair
-        result["timeframe"] = timeframe
     
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -49,6 +65,3 @@ async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form
         "selected_pair": pair,
         "selected_tf": timeframe
     })
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
