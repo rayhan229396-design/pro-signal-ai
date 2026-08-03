@@ -1,6 +1,4 @@
 import pandas as pd
-import yfinance as yf
-import ccxt
 import requests
 from datetime import datetime
 import pytz
@@ -9,76 +7,49 @@ import os
 # ====================== API KEY ======================
 TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "")
 
-# ---------------------- Pair Lists ----------------------
+# ---------------------- Only Selected Pairs ----------------------
 FOREX_PAIRS = {
     "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
     "AUDUSD": "AUD/USD",
+    "USDJPY": "USD/JPY",
+    "GBPUSD": "GBP/USD",
     "USDCAD": "USD/CAD",
     "USDCHF": "USD/CHF",
-    "NZDUSD": "NZD/USD",
-    "EURGBP": "EUR/GBP",
     "EURJPY": "EUR/JPY",
-    "GBPJPY": "GBP/JPY",
-    "AUDJPY": "AUD/JPY",
-    "EURAUD": "EUR/AUD",
-    "EURCHF": "EUR/CHF",
-    "GBPAUD": "GBP/AUD",
     "CADJPY": "CAD/JPY",
+    "GBPJPY": "GBP/JPY",
+    "GBPAUD": "GBP/AUD",
+    "AUDJPY": "AUD/JPY",
+    "CHFJPY": "CHF/JPY",
+    "EURCHF": "EUR/CHF",
+    "AUDCAD": "AUD/CAD",
+    "EURCAD": "EUR/CAD",
+    "EURAUD": "EUR/AUD",
+    "EURGBP": "EUR/GBP",
+    "GBPCHF": "GBP/CHF",
+    "AUDCHF": "AUD/CHF",
+    "GBPCAD": "GBP/CAD",
 }
 
 CRYPTO_PAIRS = {
-    "BTCUSDT": "BTC-USD",
-    "ETHUSDT": "ETH-USD",
-    "SOLUSDT": "SOL-USD",
-    "BNBUSDT": "BNB-USD",
-    "XRPUSDT": "XRP-USD",
-    "ADAUSDT": "ADA-USD",
-    "DOGEUSDT": "DOGE-USD",
-    "AVAXUSDT": "AVAX-USD",
-    "DOTUSDT": "DOT-USD",
-    "LINKUSDT": "LINK-USD",
-    "MATICUSDT": "MATIC-USD",
-    "LTCUSDT": "LTC-USD",
+    "BTCUSDT": "BTC/USD",
+    "ETHUSDT": "ETH/USD",   # Ethereum
 }
 
 GOLD_PAIRS = {
-    "XAUUSD": "XAU/USD",
     "GOLD": "XAU/USD",
+    "XAUUSD": "XAU/USD",
 }
 
 def get_all_pairs_list():
-    pairs = list(FOREX_PAIRS.keys()) + list(CRYPTO_PAIRS.keys()) + ["XAUUSD"]
+    pairs = list(FOREX_PAIRS.keys()) + list(CRYPTO_PAIRS.keys()) + ["GOLD"]
     return sorted(set(pairs))
-
-
-def fetch_from_yfinance(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    """Fallback using Yahoo Finance"""
-    try:
-        yf_symbol = CRYPTO_PAIRS.get(symbol, symbol + "=X")
-        period = "7d" if interval in ["1m", "1min"] else "60d"
-        
-        df = yf.download(yf_symbol, period=period, interval=interval.replace("min", "m"), 
-                         progress=False, auto_adjust=True)
-        
-        if df.empty:
-            return pd.DataFrame()
-        
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        
-        df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
-        df = df.dropna().tail(limit)
-        return df
-    except Exception as e:
-        print(f"Yahoo Finance error for {symbol}: {e}")
-        return pd.DataFrame()
 
 
 def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataFrame:
     symbol = symbol.upper().replace("/", "").replace("-", "")
     
+    # Timeframe mapping for Twelve Data
     tf_map = {
         "1m": "1min", "1min": "1min", "1 minute": "1min",
         "5m": "5min", "5min": "5min", "5 minute": "5min",
@@ -86,19 +57,18 @@ def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataF
     }
     interval = tf_map.get(timeframe.lower(), "5min")
     
-    # ===================== CRYPTO → Yahoo Finance (Binance blocked) =====================
-    if symbol in CRYPTO_PAIRS:
-        return fetch_from_yfinance(symbol, interval, limit)
+    # Determine Twelve Data symbol
+    if symbol in FOREX_PAIRS:
+        td_symbol = FOREX_PAIRS[symbol]
+    elif symbol in CRYPTO_PAIRS:
+        td_symbol = CRYPTO_PAIRS[symbol]
+    elif symbol in GOLD_PAIRS:
+        td_symbol = GOLD_PAIRS[symbol]
+    else:
+        print(f"Unsupported symbol: {symbol}")
+        return pd.DataFrame()
     
-    # ===================== FOREX + GOLD → Twelve Data =====================
     try:
-        if symbol in FOREX_PAIRS:
-            td_symbol = FOREX_PAIRS[symbol]
-        elif symbol in GOLD_PAIRS:
-            td_symbol = GOLD_PAIRS[symbol]
-        else:
-            td_symbol = symbol
-        
         url = "https://api.twelvedata.com/time_series"
         params = {
             "symbol": td_symbol,
@@ -117,7 +87,7 @@ def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataF
         
         df = pd.DataFrame(data["values"])
         
-        # Rename columns safely
+        # Rename columns
         rename_map = {
             "datetime": "timestamp",
             "open": "Open",
@@ -127,7 +97,7 @@ def fetch_data(symbol: str, timeframe: str = "5m", limit: int = 200) -> pd.DataF
         }
         df = df.rename(columns=rename_map)
         
-        # Volume may not exist for Forex
+        # Volume may not always be present
         if "volume" in df.columns:
             df = df.rename(columns={"volume": "Volume"})
         else:
