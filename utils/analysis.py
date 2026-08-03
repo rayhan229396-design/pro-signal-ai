@@ -167,11 +167,10 @@ def generate_signal(df: pd.DataFrame) -> dict:
     elif prev["Candle_Dir"] == -1 and latest["Candle_Dir"] == -1:
         score -= 5
         reasons.append("2 consecutive bearish candles")
-    
-    # Final score
+# Final score
     score = max(0, min(100, int(score)))
     
-    # ===================== Binary Decision =====================
+    # ===================== Binary Decision (More Sensitive) =====================
     if score >= 55:
         signal = "CALL"
         entry = "UP"
@@ -187,11 +186,11 @@ def generate_signal(df: pd.DataFrame) -> dict:
     
     # Confidence
     if signal == "WAIT":
-        confidence = max(35, 100 - abs(score - 50) * 1.5)
+        confidence = max(30, 100 - abs(score - 50) * 1.6)
     else:
         confidence = score if signal == "CALL" else (100 - score)
     
-    confidence = int(min(92, max(50, confidence)))
+    confidence = int(min(90, max(50, confidence)))
     
     return {
         "signal": signal,
@@ -202,5 +201,5 @@ def generate_signal(df: pd.DataFrame) -> dict:
         "price": round(close, 5),
         "time": get_dhaka_time(),
         "rsi": round(rsi, 1) if rsi else None,
-        "score": score
+        "score": score          # ← এইটা যোগ করা হয়েছে
     }
