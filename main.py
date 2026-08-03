@@ -16,13 +16,16 @@ async def home(request: Request):
     except:
         pairs = ["EURUSD", "GBPUSD", "USDJPY", "BTCUSDT", "ETHUSDT", "XAUUSD"]
     
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "pairs": pairs,
-        "result": None,
-        "selected_pair": "EURUSD",
-        "selected_tf": "5m"
-    })
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "pairs": pairs,
+            "result": None,
+            "selected_pair": "EURUSD",
+            "selected_tf": "5m"
+        }
+    )
 
 @app.post("/analyze", response_class=HTMLResponse)
 async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form(...)):
@@ -58,10 +61,13 @@ async def analyze(request: Request, pair: str = Form(...), timeframe: str = Form
             "time": "--:--:--",
         }
     
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "pairs": pairs,
-        "result": result,
-        "selected_pair": pair,
-        "selected_tf": timeframe
-    })
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "pairs": pairs,
+            "result": result,
+            "selected_pair": pair,
+            "selected_tf": timeframe
+        }
+    )
