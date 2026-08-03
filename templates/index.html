@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Market Signal AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --card: #111827;
+            --cyan: #00f0ff;
+            --cyan-dim: #00c4d4;
+            --green: #00ff9d;
+            --red: #ff3b5c;
+            --yellow: #ffcc00;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px 12px;
+            background-image: 
+                radial-gradient(ellipse at top, #0f172a 0%, transparent 60%),
+                radial-gradient(ellipse at bottom, #0c1222 0%, transparent 60%);
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 420px;
+        }
+        
+        .card {
+            background: linear-gradient(145deg, #111827, #0f172a);
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            border-radius: 20px;
+            padding: 28px 22px;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.08),
+                        inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            color: var(--cyan);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            margin-bottom: 16px;
+        }
+        
+        .badge::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            background: var(--cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--cyan);
+        }
+        
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            text-align: center;
+            background: linear-gradient(90deg, #00f0ff, #00ff9d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+            letter-spacing: 1px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.85rem;
+            letter-spacing: 1.5px;
+            margin-bottom: 28px;
+            text-transform: uppercase;
+        }
+        
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--muted);
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        
+        select {
+            width: 100%;
+            background: #0b1220;
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: var(--text);
+            padding: 13px 16px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            margin-bottom: 18px;
+            outline: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2300f0ff' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            transition: border-color 0.2s;
+        }
+        
+        select:focus {
+            border-color: var(--cyan);
+        }
+        
+        .btn {
+            width: 100%;
+            background: linear-gradient(90deg, #00c6ff, #0072ff);
+            border: none;
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            padding: 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 4px 20px rgba(0, 150, 255, 0.35);
+            margin-top: 6px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 25px rgba(0, 150, 255, 0.5);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .result-box {
+            margin-top: 28px;
+            animation: fadeIn 0.4s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .signal-badge {
+            text-align: center;
+            padding: 16px;
+            border-radius: 14px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            margin-bottom: 18px;
+        }
+        
+        .signal-buy {
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid var(--green);
+            color: var(--green);
+            text-shadow: 0 0 15px rgba(0, 255, 157, 0.5);
+        }
+        
+        .signal-sell {
+            background: rgba(255, 59, 92, 0.1);
+            border: 1px solid var(--red);
+            color: var(--red);
+            text-shadow: 0 0 15px rgba(255, 59, 92, 0.5);
+        }
+        
+        .signal-wait {
+            background: rgba(255, 204, 0, 0.1);
+            border: 1px solid var(--yellow);
+            color: var(--yellow);
+            text-shadow: 0 0 15px rgba(255, 204, 0, 0.4);
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .info-card {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 14px 12px;
+            text-align: center;
+        }
+        
+        .info-label {
+            font-size: 0.7rem;
+            color: var(--muted);
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        
+        .info-value {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+        
+        .info-value.green { color: var(--green); }
+        .info-value.red { color: var(--red); }
+        .info-value.yellow { color: var(--yellow); }
+        
+        .summary {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(0, 240, 255, 0.15);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        
+        .summary strong {
+            color: var(--cyan);
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+        
+        .reasons {
+            margin-top: 8px;
+            padding-left: 14px;
+        }
+        
+        .reasons li {
+            margin-bottom: 3px;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+        
+        .footer-note {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.75rem;
+            color: #64748b;
+            line-height: 1.4;
+        }
+        
+        .warning {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 14px;
+            font-size: 0.75rem;
+            color: #fbbf24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div style="text-align:center">
+                <div class="badge">4-LAYER INSTITUTIONAL LOGIC</div>
+            </div>
+            
+            <h1>REAL MARKET SIGNAL AI</h1>
+            <p class="subtitle">Advanced Algorithmic Confluence Engine</p>
+            
+            <form method="POST" action="/analyze">
+                <label>Select Asset Pair</label>
+                <select name="pair" required>
+                    {% for p in pairs %}
+                        <option value="{{ p }}" {% if selected_pair == p %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
+                </select>
+                
+                <label>Select Timeframe</label>
+                <select name="timeframe" required>
+                    <option value="1m" {% if selected_tf == "1m" %}selected{% endif %}>1 MINUTE</option>
+                    <option value="5m" {% if selected_tf == "5m" %}selected{% endif %}>5 MINUTE</option>
+                    <option value="15m" {% if selected_tf == "15m" %}selected{% endif %}>15 MINUTE</option>
+                </select>
+                
+                <button type="submit" class="btn">ANALYZE SIGNAL</button>
+            </form>
+            
+            {% if result %}
+            <div class="result-box">
+                {% if result.signal == "BUY" %}
+                    <div class="signal-badge signal-buy">▲ BUY / LONG</div>
+                {% elif result.signal == "SELL" %}
+                    <div class="signal-badge signal-sell">▼ SELL / SHORT</div>
+                {% else %}
+                    <div class="signal-badge signal-wait">⚠ WAIT / NO TRADE</div>
+                {% endif %}
+                
+                <div class="grid">
+                    <div class="info-card">
+                        <div class="info-label">Entry Time (GMT+6)</div>
+                        <div class="info-value">{{ result.time }}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Accuracy Score</div>
+                        <div class="info-value {% if result.confidence >= 70 %}green{% elif result.confidence >= 50 %}yellow{% else %}red{% endif %}">
+                            {{ result.confidence }}%
+                        </div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Live Price</div>
+                        <div class="info-value">{{ result.price }}</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-label">Market Trend</div>
+                        <div class="info-value {% if result.trend == 'Bullish' %}green{% elif result.trend == 'Bearish' %}red{% else %}yellow{% endif %}">
+                            {{ result.trend }}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="summary">
+                    <strong>LOGICAL ANALYSIS SUMMARY</strong>
+                    {% if result.signal == "WAIT" %}
+                        Confluence score is not strong enough. System recommends waiting to protect capital.
+                    {% else %}
+                        {{ result.signal }} signal generated with {{ result.confidence }}% confidence. Suggested entry: <b>{{ result.entry }}</b>.
+                    {% endif %}
+                    
+                    {% if result.reasons %}
+                    <ul class="reasons">
+                        {% for r in result.reasons %}
+                            <li>{{ r }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="warning">
+                ⚠ Strict Filter: Signals only trigger on high confluence
+            </div>
+            
+            <p class="footer-note">
+                For educational purposes only. Not financial advice.<br>
+                Trading involves substantial risk of loss.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
