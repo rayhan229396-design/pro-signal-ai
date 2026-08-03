@@ -12,21 +12,13 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # EMA Momentum
     df["EMA_8"] = ta.trend.ema_indicator(df["Close"], window=8)
     df["EMA_21"] = ta.trend.ema_indicator(df["Close"], window=21)
-    df["EMA_200"] = ta.trend.ema_indicator(df["Close"], window=200)
     
     # RSI & Stochastic
     df["RSI"] = ta.momentum.rsi(df["Close"], window=7)
     stoch = ta.momentum.StochasticOscillator(df["High"], df["Low"], df["Close"], window=8, smooth_window=3)
     df["STOCH_K"] = stoch.stoch()
-    df["STOCH_D"] = stoch.stoch_signal()
     
-    # Bollinger Bands & ATR
-    bb = ta.volatility.BollingerBands(df["Close"], window=14, window_dev=2)
-    df["BB_Upper"] = bb.bollinger_hband()
-    df["BB_Lower"] = bb.bollinger_lband()
-    df["ATR"] = ta.volatility.average_true_range(df["High"], df["Low"], df["Close"], window=10)
-    
-    # Candle Structure
+    # Candle Body Structure
     df["Body"] = df["Close"] - df["Open"]
     df["Body_Size"] = abs(df["Body"])
     df["Upper_Wick"] = df["High"] - df[["Open", "Close"]].max(axis=1)
@@ -45,11 +37,11 @@ def detect_candlestick_pattern(df: pd.DataFrame) -> tuple:
     l_wick = curr["Lower_Wick"]
     u_wick = curr["Upper_Wick"]
     
-    # Hammer / Pinbar (Bullish)
+    # Hammer / Pinbar
     if l_wick >= (body * 2) and u_wick <= (body * 0.5):
         return "Bullish Pinbar / Hammer", 15
     
-    # Shooting Star (Bearish)
+    # Shooting Star
     if u_wick >= (body * 2) and l_wick <= (body * 0.5):
         return "Bearish Shooting Star", -15
         
@@ -71,10 +63,8 @@ def check_support_resistance(df: pd.DataFrame) -> tuple:
     recent_low = df["Low"].tail(20).min()
     recent_high = df["High"].tail(20).max()
     
-    # Price Near Support (Within 0.05%)
     if abs(curr_close - recent_low) / curr_close < 0.0005:
         return "At Key Support Level", 15
-    # Price Near Resistance
     elif abs(curr_close - recent_high) / curr_close < 0.0005:
         return "At Key Resistance Level", -15
         
@@ -84,12 +74,12 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
     if df.empty or len(df) < 30:
         return {
             "signal": "WAIT", "confidence": 0, "trend": "Unknown",
-            "entry": "None", "reasons": ["Insufficient Market Data"],
+            "entry": "None", "reasons": ["Not enough live data"],
             "price": 0, "time": get_dhaka_time()
         }
     
-    # ================= 1. Multi-Timeframe (HTF) Alignment =================
-    htf_frame = "15m" if timeframe in ["1m", "5m"] else "1h"
+    # Higher Timeframe Trend Alignment
+    htf_frame = "15m" if timeframe in ["1m", "5m"] else "15m"
     htf_df = fetch_data(pair, timeframe=htf_frame, limit=50)
     htf_trend = "Neutral"
     
@@ -104,7 +94,7 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
     score = 50
     reasons = []
     
-    # HTF Trend Filter
+    # 1. HTF Trend
     if htf_trend == "Bullish":
         score += 10
         reasons.append(f"Higher Timeframe ({htf_frame}) is Bullish")
@@ -112,7 +102,7 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
         score -= 10
         reasons.append(f"Higher Timeframe ({htf_frame}) is Bearish")
 
-    # ================= 2. Price Action & Candlestick =================
+    # 2. Price Action Patterns & S/R
     pattern, p_score = detect_candlestick_pattern(df)
     if pattern:
         score += p_score
@@ -123,7 +113,7 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
         score += sr_score
         reasons.append(sr_zone)
 
-    # ================= 3. Technical Indicators =================
+    # 3. Technical Indicators
     rsi = latest.get("RSI", 50)
     stoch_k = latest.get("STOCH_K", 50)
     
@@ -141,7 +131,6 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
         score -= 8
         reasons.append("Stochastic Overbought")
 
-    # EMA Alignment
     if latest["EMA_8"] > latest["EMA_21"]:
         score += 6
     else:
@@ -149,12 +138,11 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
 
     score = max(0, min(100, int(score)))
 
-    # ================= 4. Strict Binary Decision =================
-    # HTF ট্রেন্ডের বিপরীতে সিগন্যাল ফিল্টার করা
-    if score >= 65 and htf_trend != "Bearish":
+    # 4. Final Binary Signal Decision
+    if score >= 62 and htf_trend != "Bearish":
         signal = "CALL"
         entry = "UP (1-Candle Expiry)"
-    elif score <= 35 and htf_trend != "Bullish":
+    elif score <= 38 and htf_trend != "Bullish":
         signal = "PUT"
         entry = "DOWN (1-Candle Expiry)"
     else:
