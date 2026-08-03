@@ -104,99 +104,101 @@ def generate_signal(df: pd.DataFrame) -> dict:
     rsi = latest.get("RSI", 50)
     adx = latest.get("ADX", 0)
     
-    # LAYER 1: Trend Direction
+    # ===================== LAYER 1: Trend Direction =====================
     ema9 = latest.get("EMA_9")
     ema21 = latest.get("EMA_21")
     ema50 = latest.get("EMA_50")
     
     if ema9 and ema21 and ema9 > ema21:
-        score += 6
+        score += 7
         reasons.append("EMA9 > EMA21 (short-term up)")
     elif ema9 and ema21:
-        score -= 6
+        score -= 7
         reasons.append("EMA9 < EMA21 (short-term down)")
     
     if ema21 and ema50 and ema21 > ema50:
-        score += 5
+        score += 6
         reasons.append("EMA21 > EMA50 (medium uptrend)")
     elif ema21 and ema50:
-        score -= 5
+        score -= 6
         reasons.append("EMA21 < EMA50 (medium downtrend)")
     
     if latest.get("Supertrend_Dir") == 1:
-        score += 7
+        score += 8
         reasons.append("Supertrend Bullish")
     else:
-        score -= 7
+        score -= 8
         reasons.append("Supertrend Bearish")
     
-    # LAYER 2: Momentum
+    # ===================== LAYER 2: Momentum =====================
     if rsi < 30:
-        score += 12
+        score += 13
         reasons.append(f"RSI Oversold ({rsi:.1f})")
     elif rsi < 40:
-        score += 6
+        score += 7
         reasons.append(f"RSI low ({rsi:.1f})")
     elif rsi > 70:
-        score -= 12
+        score -= 13
         reasons.append(f"RSI Overbought ({rsi:.1f})")
     elif rsi > 60:
-        score -= 6
+        score -= 7
         reasons.append(f"RSI high ({rsi:.1f})")
     
     if latest.get("MACD") and latest.get("MACD_Signal"):
         if latest["MACD"] > latest["MACD_Signal"] and prev.get("MACD", 0) <= prev.get("MACD_Signal", 0):
-            score += 9
+            score += 10
             reasons.append("MACD Bullish Cross")
         elif latest["MACD"] < latest["MACD_Signal"] and prev.get("MACD", 0) >= prev.get("MACD_Signal", 0):
-            score -= 9
+            score -= 10
             reasons.append("MACD Bearish Cross")
         elif latest.get("MACD_Hist", 0) > 0:
-            score += 3
+            score += 4
         else:
-            score -= 3
+            score -= 4
     
     stoch_k = latest.get("STOCH_K", 50)
     if stoch_k < 20:
-        score += 7
+        score += 8
         reasons.append(f"Stochastic Oversold ({stoch_k:.1f})")
     elif stoch_k > 80:
-        score -= 7
+        score -= 8
         reasons.append(f"Stochastic Overbought ({stoch_k:.1f})")
     
-    # LAYER 3: Volatility & Strength
+    # ===================== LAYER 3: Volatility & Strength =====================
     if adx > 25:
-        score += 4
+        score += 5
         reasons.append(f"Strong Trend (ADX {adx:.1f})")
-    elif adx < 15:
-        score -= 3
+    elif adx < 18:
+        score -= 4
         reasons.append(f"Weak Trend (ADX {adx:.1f})")
     
-    if latest.get("BB_Lower") and close <= latest["BB_Lower"] * 1.003:
-        score += 8
+    if latest.get("BB_Lower") and close <= latest["BB_Lower"] * 1.002:
+        score += 9
         reasons.append("Price at Lower Bollinger")
-    elif latest.get("BB_Upper") and close >= latest["BB_Upper"] * 0.997:
-        score -= 8
+    elif latest.get("BB_Upper") and close >= latest["BB_Upper"] * 0.998:
+        score -= 9
         reasons.append("Price at Upper Bollinger")
     
-    # LAYER 4: Structure
+    # ===================== LAYER 4: Structure =====================
     dist_to_sup = (close - latest.get("Support", close)) / close * 100 if latest.get("Support") else 99
     dist_to_res = (latest.get("Resistance", close) - close) / close * 100 if latest.get("Resistance") else 99
     
-    if dist_to_sup < 0.35:
+    if dist_to_sup < 0.40:
         score += 8
         reasons.append("Near Support")
-    if dist_to_res < 0.35:
+    if dist_to_res < 0.40:
         score -= 8
         reasons.append("Near Resistance")
     
+    # Final Score Clamp
     score = max(0, min(100, int(score)))
     
-    if score >= 72:
+    # ===================== Signal Decision (5m / 15m Optimized) =====================
+    if score >= 62:
         signal = "BUY"
         entry = "LONG"
         trend = "Bullish"
-    elif score <= 28:
+    elif score <= 38:
         signal = "SELL"
         entry = "SHORT"
         trend = "Bearish"
@@ -205,12 +207,13 @@ def generate_signal(df: pd.DataFrame) -> dict:
         entry = "None"
         trend = "Sideways / Unclear"
     
+    # Confidence Calculation
     if signal == "WAIT":
-        confidence = max(30, 100 - abs(score - 50) * 1.5)
+        confidence = max(35, 100 - abs(score - 50) * 1.4)
     else:
         confidence = score if signal == "BUY" else (100 - score)
     
-    confidence = int(min(95, max(40, confidence)))
+    confidence = int(min(95, max(45, confidence)))
     
     return {
         "signal": signal,
