@@ -4,19 +4,22 @@ import ta
 from utils.data_fetcher import get_dhaka_time, fetch_data
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or len(df) < 30:
+    if df.empty or len(df) < 35:
         return df
     
     df = df.copy()
     
-    # EMA Momentum
-    df["EMA_8"] = ta.trend.ema_indicator(df["Close"], window=8)
+    # EMAs
+    df["EMA_9"] = ta.trend.ema_indicator(df["Close"], window=9)
     df["EMA_21"] = ta.trend.ema_indicator(df["Close"], window=21)
     
-    # RSI & Stochastic
-    df["RSI"] = ta.momentum.rsi(df["Close"], window=7)
-    stoch = ta.momentum.StochasticOscillator(df["High"], df["Low"], df["Close"], window=8, smooth_window=3)
-    df["STOCH_K"] = stoch.stoch()
+    # RSI
+    df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
+    
+    # MACD
+    macd = ta.trend.MACD(df["Close"], window_slow=26, window_fast=12, window_sign=9)
+    df["MACD"] = macd.macd()
+    df["MACD_Signal"] = macd.macd_signal()
     
     # Candle Structure
     df["Body"] = df["Close"] - df["Open"]
@@ -33,54 +36,54 @@ def detect_candlestick_pattern(df: pd.DataFrame) -> tuple:
     curr = df.iloc[-1]
     prev = df.iloc[-2]
     
-    body = curr["Body_Size"]
+    body = curr["Body_Size"] if curr["Body_Size"] > 0 else 0.00001
     l_wick = curr["Lower_Wick"]
     u_wick = curr["Upper_Wick"]
     
-    # Hammer / Pinbar (Bullish)
-    if l_wick >= (body * 2) and u_wick <= (body * 0.5):
-        return "Bullish Pinbar / Hammer", 15
+    # Bullish Rejection / Hammer
+    if l_wick >= (body * 2.0) and u_wick <= (body * 0.5):
+        return "Bullish Rejection", 15
     
-    # Shooting Star (Bearish)
-    if u_wick >= (body * 2) and l_wick <= (body * 0.5):
-        return "Bearish Shooting Star", -15
+    # Bearish Rejection / Shooting Star (SELL Signal)
+    if u_wick >= (body * 2.0) and l_wick <= (body * 0.5):
+        return "Bearish Rejection", -15
         
     # Bullish Engulfing
-    if prev["Body"] < 0 and curr["Body"] > 0 and curr["Close"] > prev["Open"] and curr["Open"] < prev["Close"]:
-        return "Bullish Engulfing", 18
+    if prev["Body"] < 0 and curr["Body"] > 0 and curr["Close"] > prev["Open"]:
+        return "Bullish Engulfing", 12
         
-    # Bearish Engulfing
-    if prev["Body"] > 0 and curr["Body"] < 0 and curr["Close"] < prev["Open"] and curr["Open"] > prev["Close"]:
-        return "Bearish Engulfing", -18
+    # Bearish Engulfing (SELL Signal)
+    if prev["Body"] > 0 and curr["Body"] < 0 and curr["Close"] < prev["Open"]:
+        return "Bearish Engulfing", -12
         
     return None, 0
 
 def check_support_resistance(df: pd.DataFrame) -> tuple:
-    if len(df) < 20:
+    if len(df) < 30:
         return "Mid Zone", 0
     
     curr_close = df.iloc[-1]["Close"]
-    recent_low = df["Low"].tail(20).min()
-    recent_high = df["High"].tail(20).max()
+    recent_low = df["Low"].tail(30).min()
+    recent_high = df["High"].tail(30).max()
     
-    # Support & Resistance Check
-    if abs(curr_close - recent_low) / curr_close < 0.0005:
-        return "At Key Support Level", 15
-    elif abs(curr_close - recent_high) / curr_close < 0.0005:
-        return "At Key Resistance Level", -15
+    # Support (BUY) & Resistance (SELL)
+    if abs(curr_close - recent_low) / curr_close < 0.0008:
+        return "At Key Support Zone", 12
+    elif abs(curr_close - recent_high) / curr_close < 0.0008:
+        return "At Key Resistance Zone", -12
         
     return "Neutral Zone", 0
 
 def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> dict:
-    if df.empty or len(df) < 30:
+    if df.empty or len(df) < 35:
         return {
             "signal": "WAIT", "confidence": 0, "trend": "Unknown",
             "entry": "None", "reasons": ["Not enough live data"],
             "price": 0, "time": get_dhaka_time()
         }
     
-    # HTF Trend Check (15m)
-    htf_frame = "15m"
+    # HTF Trend (1 Hour)
+    htf_frame = "1h"
     htf_df = fetch_data(pair, timeframe=htf_frame, limit=50)
     htf_trend = "Neutral"
     
@@ -94,16 +97,16 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
             htf_trend = "Bearish"
     
     latest = df.iloc[-1]
-    score = 50  # Balanced Base Score
+    score = 50
     reasons = []
     
-    # 1. HTF Trend (Balanced Weight)
+    # 1. 1-Hour Trend Check
     if htf_trend == "Bullish":
         score += 6
-        reasons.append(f"Higher Timeframe ({htf_frame}) is Bullish")
+        reasons.append("1-Hour Trend is Bullish")
     elif htf_trend == "Bearish":
         score -= 6
-        reasons.append(f"Higher Timeframe ({htf_frame}) is Bearish")
+        reasons.append("1-Hour Trend is Bearish")
 
     # 2. Candlestick Patterns
     pattern, p_score = detect_candlestick_pattern(df)
@@ -111,46 +114,49 @@ def generate_signal(df: pd.DataFrame, pair: str = "", timeframe: str = "5m") -> 
         score += p_score
         reasons.append(f"Pattern: {pattern}")
         
-    # 3. Support & Resistance Zone
+    # 3. Support / Resistance
     sr_zone, sr_score = check_support_resistance(df)
     if sr_score != 0:
         score += sr_score
         reasons.append(sr_zone)
 
-    # 4. Technical Indicators (RSI & Stochastic)
+    # 4. Indicators (Balanced Add/Subtract)
     rsi = latest.get("RSI", 50)
-    stoch_k = latest.get("STOCH_K", 50)
+    macd = latest.get("MACD", 0)
+    macd_signal = latest.get("MACD_Signal", 0)
     
-    if rsi < 30:
-        score += 12
+    # RSI Thresholds
+    if rsi < 35:
+        score += 15
         reasons.append(f"RSI Oversold ({rsi:.1f})")
-    elif rsi > 70:
-        score -= 12
+    elif rsi > 65:
+        score -= 15
         reasons.append(f"RSI Overbought ({rsi:.1f})")
         
-    if stoch_k < 20:
+    # MACD Crossover
+    if macd > macd_signal:
         score += 10
-        reasons.append("Stochastic Oversold")
-    elif stoch_k > 80:
+        reasons.append("MACD Bullish Crossover")
+    elif macd < macd_signal:
         score -= 10
-        reasons.append("Stochastic Overbought")
+        reasons.append("MACD Bearish Crossover")
 
     # EMA Alignment
-    if latest["EMA_8"] > latest["EMA_21"]:
+    if latest["EMA_9"] > latest["EMA_21"]:
         score += 8
-    elif latest["EMA_8"] < latest["EMA_21"]:
+    elif latest["EMA_9"] < latest["EMA_21"]:
         score -= 8
 
-    # Score Clamping (0-100)
+    # Limit Score
     score = max(0, min(100, int(score)))
 
-    # 5. Balanced Binary Signal Decision
-    if score >= 64:
+    # 5. Balanced Threshold (58 & 42)
+    if score >= 58:
         signal = "CALL"
-        entry = "UP (1-Candle Expiry)"
-    elif score <= 36:
+        entry = "UP (5m Candle Expiry)"
+    elif score <= 42:
         signal = "PUT"
-        entry = "DOWN (1-Candle Expiry)"
+        entry = "DOWN (5m Candle Expiry)"
     else:
         signal = "WAIT"
         entry = "None"
